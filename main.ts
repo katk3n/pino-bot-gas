@@ -1,8 +1,8 @@
-function getRandomIndex(options: (string)[]): number {
-  return Math.floor(Math.random() * options.length);
+function getRandomMessage(options: (string)[]): string {
+  return options[Math.floor(Math.random() * options.length)];
 }
 
-async function reply(replyToken: string, msg: string): Promise<void> {
+function reply(replyToken: string, msg: string): void {
   const channelToken = PropertiesService.getScriptProperties().getProperty('LINE_ACCESS_TOKEN');
   const url = "https://api.line.me/v2/bot/message/reply";
   let message = {
@@ -10,19 +10,17 @@ async function reply(replyToken: string, msg: string): Promise<void> {
     "messages": [{ "type": "text", "text": msg }]
   };
 
-  let options = {
+  UrlFetchApp.fetch(url, {
     "method": "post",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer " + channelToken
     },
     "payload": JSON.stringify(message)
-  };
-
-  UrlFetchApp.fetch(url, options);
+  });
 }
 
-async function createResponseFromTextMessage(msg: string): Promise<string> {
+function createResponseFromTextMessage(msg: string): string {
   // Get phrase list
   const spreadsheetId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
   const ss = SpreadsheetApp.openById(spreadsheetId);
@@ -32,7 +30,7 @@ async function createResponseFromTextMessage(msg: string): Promise<string> {
   const replyOptions = values.map((value) => { return value[0] });
 
   // Choose reply ramdomly
-  let replyMsg = replyOptions[getRandomIndex(replyOptions)];
+  let replyMsg = getRandomMessage(replyOptions);
 
   if (Math.random() < 0.1) {
     // Learn new phrase
@@ -43,7 +41,7 @@ async function createResponseFromTextMessage(msg: string): Promise<string> {
   return replyMsg;
 }
 
-async function createResponseFromImageMessage(numOfImages): Promise<string> {
+function createResponseFromImageMessage(numOfImages: number): string {
   const index = Math.floor(Math.random() * numOfImages);
 
   return (index + 1) + "番目のやつが一番いいと思うにゃ！";
@@ -54,33 +52,28 @@ function doPost(e) {
   const json = e.postData.contents;
   const events = JSON.parse(json).events;
 
-  let handledImageSet = [];
+  for (const event of events) {
+    if (event.type == "message") {
+      if (event.message.type == "text") {
+        const msg = createResponseFromTextMessage(event.message.text);
+        reply(event.replyToken, msg);
 
-  (async() => {
-    for (const event of events) {
-      if (event.type == "message") {
-        if (event.message.type == "text") {
-          const msg = await createResponseFromTextMessage(event.message.text);
-          await reply(event.replyToken, msg);
-
-        } else if (event.message.type == "image") {
-          if ("imageSet" in event.message) {
-            // the event has more than 1 image
-            if (!handledImageSet.includes(event.message.imageSet.id)) {
-              // It's first time to handle this imageSet ID
-              const msg = await createResponseFromImageMessage(event.message.imageSet.total);
-              await reply(event.replyToken, msg);
-              handledImageSet.push(event.message.imageSet.id);
-            }
-
-          } else {
-            // the event has only 1 image
-            await reply(event.replyToken, "いいね！");
+      } else if (event.message.type == "image") {
+        if ("imageSet" in event.message) {
+          // the event has more than 1 image
+          if (event.message.imageSet.index == 1) {
+            // Only handle the first imageSet index of the imageSet ID
+            const msg = createResponseFromImageMessage(event.message.imageSet.total);
+            reply(event.replyToken, msg);
           }
+
+        } else {
+          // the event has only 1 image
+          reply(event.replyToken, "いいね！");
         }
       }
     }
-  })();
+  }
 }
 
 function remindMeal(): void {
@@ -90,19 +83,16 @@ function remindMeal(): void {
     "ごはん！", "おなかすいた"
   ];
 
-  let msg = msgOptions[getRandomIndex(msgOptions)];
   let message = {
-    "messages": [{ "type": "text", "text": msg }]
+    "messages": [{ "type": "text", "text": getRandomMessage(msgOptions) }]
   };
 
-  let options = {
+  UrlFetchApp.fetch(url, {
     "method": "post",
     "headers": {
       "Content-Type": "application/json",
       "Authorization": "Bearer " + channelToken
     },
     "payload": JSON.stringify(message)
-  };
-
-  UrlFetchApp.fetch(url, options);
+  });
 }
